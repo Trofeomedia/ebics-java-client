@@ -1,6 +1,7 @@
 package org.kopi.ebics.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -8,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import org.junit.jupiter.api.Test;
+import org.kopi.ebics.session.OrderType;
 
 class ParameterizedEbicsClientLauncherTest {
     @Test
@@ -227,5 +229,44 @@ class ParameterizedEbicsClientLauncherTest {
     void normalizeHandlesBlankValues() {
         assertNull(ParameterizedEbicsClientLauncher.normalize("   "));
         assertEquals("value", ParameterizedEbicsClientLauncher.normalize(" value "));
+    }
+
+    /**
+     * Not every entry of a bank-published BTF list carries a version. ZKB's result archive is
+     * "OTH BIL CH004TPE msc" with no version at all, so requiring --msg-version made those order
+     * types unreachable through this launcher.
+     */
+    @Test
+    void acceptsBtdWithoutMessageVersion() {
+        var parsed = ParameterizedEbicsClientLauncher.ParsedArguments.parse(
+            new String[]{
+                "--btd", "--service", "OTH", "--scope", "BIL", "--option", "CH004TPE",
+                "--msg-name", "msc", "--container", "ZIP", "-o", "result.zip"
+            }
+        );
+
+        var params = ParameterizedEbicsClientLauncher.btdDownloadParams(parsed);
+
+        assertNull(params.messageVersion(), "a versionless BTF entry must not be rejected");
+        assertEquals("CH004TPE", params.option());
+        assertEquals("msc", params.messageName());
+    }
+
+    /**
+     * XTC uploads the CSV input of ZKB's camt simulation ("OTH BIL CH004TPS csv"). The BTF entry
+     * has no version, and a simulation input carries no electronic signature.
+     */
+    @Test
+    void mapsXtcToTheCamtSimulationUpload() {
+        var params = ParameterizedEbicsClientLauncher.defaultUploadParams(null, OrderType.XTC);
+
+        var orderParams = params.orderParams();
+        assertNotNull(orderParams, "XTC is a BTU order and needs service parameters");
+        assertEquals("OTH", orderParams.serviceName());
+        assertEquals("BIL", orderParams.scope());
+        assertEquals("CH004TPS", orderParams.option());
+        assertEquals("csv", orderParams.messageName());
+        assertNull(orderParams.messageVersion(), "the BTF entry carries no version");
+        assertFalse(orderParams.signatureFlag(), "a simulation input is uploaded without an ES");
     }
 }

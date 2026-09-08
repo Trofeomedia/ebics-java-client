@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.TimeZone;
 import org.apache.xmlbeans.XmlError;
+import org.apache.xmlbeans.XmlObject;
 import org.apache.xmlbeans.XmlOptions;
 import org.junit.jupiter.api.Test;
 import org.kopi.ebics.client.EbicsDownloadParams;
@@ -82,6 +83,29 @@ class DownloadInitializationRequestElementTest {
         boolean valid = params.validate(new XmlOptions().setErrorListener(errors));
 
         assertTrue(valid, "BTDOrderParams ist nicht schemakonform: " + errors);
+    }
+
+    /**
+     * Nicht jeder BTF-Eintrag einer Bank hat eine Version: das Ergebnisarchiv der ZKB ist
+     * {@code OTH BIL CH004TPE msc} ganz ohne Version. Ein leer geschriebenes Version-Attribut
+     * verletzt die H005-Facette {@code minLength=1} von NumStringType, die Bank lehnt den Auftrag
+     * also ab. Ohne Version darf das Attribut gar nicht erst entstehen.
+     */
+    @Test
+    void omitsTheMessageVersionWhenTheBtfEntryHasNone() {
+        assertVersionlessAndSchemaValid(EbicsXmlFactory.createBTDParams(
+            "OTH", "BIL", "CH004TPE", "msc", null, "ZIP", null, null));
+        assertVersionlessAndSchemaValid(EbicsXmlFactory.createBTUParams(
+            "OTH", "BIL", "CH004TPS", "csv", null, false));
+    }
+
+    private static void assertVersionlessAndSchemaValid(XmlObject params) {
+        assertFalse(params.xmlText().contains("version=\"\""),
+            "Ein leeres Version-Attribut verletzt minLength=1: " + params.xmlText());
+
+        var errors = new ArrayList<XmlError>();
+        assertTrue(params.validate(new XmlOptions().setErrorListener(errors)),
+            "Ohne Version muss der Auftragsblock schemakonform bleiben: " + errors);
     }
 
     /** Ein unbekannter Container-Typ muss abbrechen statt still zu verschwinden. */

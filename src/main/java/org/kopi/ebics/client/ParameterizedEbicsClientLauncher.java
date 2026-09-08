@@ -268,7 +268,7 @@ public final class ParameterizedEbicsClientLauncher {
         }
     }
 
-    private static EbicsUploadParams defaultUploadParams(User user, OrderType orderType) {
+    static EbicsUploadParams defaultUploadParams(User user, OrderType orderType) {
         if (orderType == OrderType.XE2) {
             var orderParams = new EbicsUploadParams.OrderParams(
                 "MCT",
